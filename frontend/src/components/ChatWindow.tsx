@@ -22,6 +22,8 @@ interface ChatWindowProps {
   onStop: () => void;
   onNodeSelect: (id: string) => void;
   onFork: (nodeId: string) => void;
+  onExecute?: (nodeId: string) => void;
+  onRefresh?: (nodeId: string) => void;
   modules: ModuleManifest[];
   slotProps: SlotProps;
 }
@@ -41,6 +43,8 @@ export function ChatWindow({
   onStop,
   onNodeSelect,
   onFork,
+  onExecute,
+  onRefresh,
   modules,
   slotProps,
 }: ChatWindowProps) {
@@ -101,6 +105,8 @@ export function ChatWindow({
             streaming={streaming}
             onNodeSelect={onNodeSelect}
             onFork={onFork}
+            onExecute={onExecute}
+            onRefresh={onRefresh}
           />
         )}
 

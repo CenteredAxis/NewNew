@@ -142,6 +142,7 @@ export interface CreateNodeReq {
   parentId: string | null;
   content: string;
   role: string;
+  nodeType?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -160,6 +161,7 @@ export async function apiCreateNode(
       parent_id: req.parentId,
       content: req.content,
       role: req.role,
+      node_type: req.nodeType ?? "message",
       metadata: req.metadata ?? {},
     }),
   });
@@ -186,6 +188,60 @@ export async function apiUpdateNodeMetadata(
   );
   if (!res.ok) throw new Error(`Failed to update metadata: ${res.statusText}`);
   return res.json();
+}
+
+// ── DAG API: Node execution ──────────────────────────────────────
+
+export async function apiExecuteNode(
+  nodeId: string,
+  config: ApiConfig
+): Promise<GraphNode> {
+  const res = await fetch(`${API_BASE}/nodes/${nodeId}/execute`, {
+    method: "POST",
+    headers: endpointHeaders(config),
+  });
+  if (!res.ok) throw new Error(`Execute failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function apiRefreshNode(
+  nodeId: string,
+  config: ApiConfig
+): Promise<GraphNode> {
+  const res = await fetch(`${API_BASE}/nodes/${nodeId}/refresh`, {
+    method: "POST",
+    headers: endpointHeaders(config),
+  });
+  if (!res.ok) throw new Error(`Refresh failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function apiUpdateNode(
+  nodeId: string,
+  updates: { content?: string; metadata?: Record<string, unknown> },
+  config: ApiConfig
+): Promise<GraphNode> {
+  const res = await fetch(`${API_BASE}/nodes/${nodeId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...endpointHeaders(config),
+    },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) throw new Error(`Update failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function apiFetchNodeTypes(
+  config: ApiConfig
+): Promise<string[]> {
+  const res = await fetch(`${API_BASE}/node-types`, {
+    headers: endpointHeaders(config),
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.types as string[];
 }
 
 // ── DAG API: Streaming completion ────────────────────────────────

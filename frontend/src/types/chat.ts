@@ -4,19 +4,30 @@ export type Role = "user" | "assistant" | "system";
  * DAG Node — replaces the old linear Message type.
  * Each node has a parent_id forming a tree/DAG structure.
  */
+export type NodeStatus = "idle" | "executing" | "complete" | "error";
+
 export interface GraphNode {
   id: string;
   conversationId: string;
   parentId: string | null;
   content: string;
   role: Role;
+  nodeType: string;
   tokenCount: number;
   metadata: {
     x?: number;
     y?: number;
+    status?: NodeStatus;
+    input?: Record<string, unknown>;
+    output?: Record<string, unknown>;
+    error?: string;
+    lastExecutedAt?: string;
+    autoRefresh?: boolean;
+    refreshIntervalMs?: number;
     [key: string]: unknown;
   };
   createdAt: string;
+  updatedAt: string;
 }
 
 /**

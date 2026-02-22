@@ -69,5 +69,18 @@ class ModuleLoader:
             self.loaded_modules.append(stem)
             logger.info("Loaded backend module: %s", stem)
 
+            # Register any node type handlers exported by the module
+            node_types = getattr(mod, "NODE_TYPES", None)
+            if node_types and isinstance(node_types, dict):
+                from .node_types import node_type_registry
+
+                for type_name, handler in node_types.items():
+                    node_type_registry.register(handler)
+                    logger.info(
+                        "Registered node type '%s' from module %s",
+                        type_name,
+                        stem,
+                    )
+
         except Exception:
             logger.exception("Failed to load backend module %s", stem)

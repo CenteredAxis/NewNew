@@ -5,6 +5,8 @@ import {
   apiDeleteConversation,
   apiGetTree,
   apiCreateNode,
+  apiExecuteNode,
+  apiRefreshNode,
   streamComplete,
   type ApiConfig,
 } from "../lib/api";
@@ -164,9 +166,11 @@ export function useGraph(config: ApiConfig) {
         parentId: userNode.id,
         content: "",
         role: "assistant",
+        nodeType: "message",
         tokenCount: 0,
         metadata: {},
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
       setNodes((prev) => [...prev, placeholderNode]);
       setActiveNodeId(placeholderId);
@@ -222,6 +226,20 @@ export function useGraph(config: ApiConfig) {
     abortRef.current?.abort();
   }, []);
 
+  // Execute a dynamic node via its registered handler
+  const executeNode = useCallback(async (nodeId: string) => {
+    const updated = await apiExecuteNode(nodeId, configRef.current);
+    setNodes((prev) => prev.map((n) => (n.id === nodeId ? updated : n)));
+    return updated;
+  }, []);
+
+  // Refresh (re-execute) a dynamic node
+  const refreshNode = useCallback(async (nodeId: string) => {
+    const updated = await apiRefreshNode(nodeId, configRef.current);
+    setNodes((prev) => prev.map((n) => (n.id === nodeId ? updated : n)));
+    return updated;
+  }, []);
+
   return {
     conversations,
     activeConversation,
@@ -235,6 +253,8 @@ export function useGraph(config: ApiConfig) {
     selectConversation,
     deleteConversation,
     setActiveNodeId,
+    executeNode,
+    refreshNode,
   };
 }
 

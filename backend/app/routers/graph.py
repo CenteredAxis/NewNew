@@ -9,6 +9,7 @@ walking backward from the active node to the root.
 import json
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -20,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.dag import dag_walk, estimate_tokens
 from ..core.database import async_session, get_db
 from ..core.llm import stream_chat_completions
+from ..core.node_types import node_type_registry
 from ..models import Conversation, Node
 
 router = APIRouter()
@@ -37,6 +39,7 @@ class CreateNodeReq(BaseModel):
     parent_id: str | None = None
     content: str
     role: str = "user"
+    node_type: str = "message"
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -50,6 +53,11 @@ class UpdateNodeMetadataReq(BaseModel):
     metadata: dict[str, Any]
 
 
+class UpdateNodeReq(BaseModel):
+    content: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
 # ── Helpers ───────────────────────────────────────────────────────
 
 
@@ -60,9 +68,11 @@ def node_to_dict(node: Node) -> dict:
         "parentId": str(node.parent_id) if node.parent_id else None,
         "content": node.content,
         "role": node.role,
+        "nodeType": node.node_type,
         "tokenCount": node.token_count,
         "metadata": node.metadata_ or {},
         "createdAt": node.created_at.isoformat() if node.created_at else None,
+        "updatedAt": node.updated_at.isoformat() if node.updated_at else None,
     }
 
 
@@ -135,6 +145,7 @@ async def create_node(
         parent_id=uuid.UUID(req.parent_id) if req.parent_id else None,
         content=req.content,
         role=req.role,
+        node_type=req.node_type,
         token_count=estimate_tokens(req.content),
         metadata_=req.metadata,
     )
@@ -168,6 +179,80 @@ async def update_node_metadata(
     await db.commit()
     await db.refresh(node)
     return node_to_dict(node)
+
+
+# ── Node update + execute ─────────────────────────────────────────
+
+
+@router.patch("/nodes/{node_id}")
+async def update_node(
+    node_id: str, req: UpdateNodeReq, db: AsyncSession = Depends(get_db)
+):
+    """Update a node's content and/or metadata."""
+    node = await db.get(Node, uuid.UUID(node_id))
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    if req.content is not None:
+        node.content = req.content
+        node.token_count = estimate_tokens(req.content)
+    if req.metadata is not None:
+        current = node.metadata_ or {}
+        current.update(req.metadata)
+        node.metadata_ = current
+    await db.commit()
+    await db.refresh(node)
+    return node_to_dict(node)
+
+
+@router.post("/nodes/{node_id}/execute")
+async def execute_node(
+    node_id: str, db: AsyncSession = Depends(get_db)
+):
+    """Execute a dynamic node's logic via its registered handler."""
+    node = await db.get(Node, uuid.UUID(node_id))
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    handler = node_type_registry.get(node.node_type)
+    if not handler:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No handler registered for node type: {node.node_type}",
+        )
+
+    # Mark as executing
+    meta = node.metadata_ or {}
+    meta["status"] = "executing"
+    node.metadata_ = meta
+    await db.commit()
+
+    try:
+        result = await handler.execute(node_to_dict(node), db)
+        node.content = result.content
+        node.token_count = estimate_tokens(result.content)
+        meta["output"] = result.output
+        meta["status"] = result.status
+        meta["error"] = result.error
+        meta["lastExecutedAt"] = datetime.now(timezone.utc).isoformat()
+        node.metadata_ = meta
+        await db.commit()
+        await db.refresh(node)
+        return node_to_dict(node)
+    except Exception as e:
+        meta["status"] = "error"
+        meta["error"] = str(e)
+        node.metadata_ = meta
+        await db.commit()
+        await db.refresh(node)
+        return node_to_dict(node)
+
+
+@router.post("/nodes/{node_id}/refresh")
+async def refresh_node(
+    node_id: str, db: AsyncSession = Depends(get_db)
+):
+    """Re-execute a dynamic node (alias for execute)."""
+    return await execute_node(node_id, db)
 
 
 # ── DAG-aware completion (streaming) ──────────────────────────────

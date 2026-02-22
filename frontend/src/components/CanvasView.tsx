@@ -20,6 +20,8 @@ interface CanvasViewProps {
   streaming: boolean;
   onNodeSelect: (id: string) => void;
   onFork: (nodeId: string) => void;
+  onExecute?: (nodeId: string) => void;
+  onRefresh?: (nodeId: string) => void;
 }
 
 const nodeTypes = { graphNode: GraphNodeCard };
@@ -30,6 +32,8 @@ export function CanvasView({
   streaming,
   onNodeSelect,
   onFork,
+  onExecute,
+  onRefresh,
 }: CanvasViewProps) {
   // Convert DAG nodes to ReactFlow format with handlers injected
   const { rfNodes, rfEdges } = useMemo(() => {
@@ -38,18 +42,20 @@ export function CanvasView({
       activeNodeId
     );
 
-    // Inject streaming + onFork into each node's data
+    // Inject streaming + callbacks into each node's data
     const enrichedNodes: RFNode[] = layoutNodes.map((n) => ({
       ...n,
       data: {
         ...n.data,
         streaming,
         onFork,
+        onExecute,
+        onRefresh,
       },
     }));
 
     return { rfNodes: enrichedNodes, rfEdges: layoutEdges as RFEdge[] };
-  }, [graphNodes, activeNodeId, streaming, onFork]);
+  }, [graphNodes, activeNodeId, streaming, onFork, onExecute, onRefresh]);
 
   const handleNodeClick = useCallback(
     (_: React.MouseEvent, node: RFNode) => {

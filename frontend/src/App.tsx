@@ -64,6 +64,8 @@ export default function App() {
     selectConversation,
     deleteConversation,
     setActiveNodeId,
+    executeNode,
+    refreshNode,
   } = useGraph(apiConfig);
 
   const effectiveModel = selectedModel || models[0] || "";
@@ -161,6 +163,8 @@ export default function App() {
         onStop={stopStreaming}
         onNodeSelect={setActiveNodeId}
         onFork={handleFork}
+        onExecute={executeNode}
+        onRefresh={refreshNode}
         modules={MODULES}
         slotProps={slotProps}
       />

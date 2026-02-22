@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .core.module_loader import ModuleLoader
 from .core.database import Base, engine
+from .core.node_types import node_type_registry
 from .routers import chat, graph, models
 
 
@@ -42,3 +43,8 @@ async def health():
 @app.get("/api/modules")
 async def list_modules():
     return {"modules": module_loader.loaded_modules}
+
+
+@app.get("/api/node-types")
+async def list_node_types():
+    return {"types": node_type_registry.registered_types}

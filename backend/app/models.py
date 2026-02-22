@@ -54,12 +54,16 @@ class Node(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False, default="")
     role: Mapped[str] = mapped_column(String, nullable=False)
+    node_type: Mapped[str] = mapped_column(String, nullable=False, default="message")
     token_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     metadata_: Mapped[dict] = mapped_column(
         "metadata", JSONB, nullable=False, default=dict
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     conversation: Mapped["Conversation"] = relationship(back_populates="nodes")
