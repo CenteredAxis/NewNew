@@ -34,13 +34,15 @@ cleanup() {
     for pid in "${PIDS[@]}"; do
         kill "$pid" 2>/dev/null || true
     done
-    docker compose -f "$ROOT_DIR/docker-compose.dev.yml" down 2>/dev/null || true
+    if [[ "${USE_LOCAL_PG:-0}" -eq 0 ]]; then
+        docker compose -f "$ROOT_DIR/docker-compose.dev.yml" down 2>/dev/null || true
+    fi
     log "Done."
 }
 trap cleanup EXIT INT TERM
 
 # ─── Prerequisite checks ────────────────────────────────────────────────────
-for cmd in docker node npm python3; do
+for cmd in node npm python3; do
     if ! command -v "$cmd" &>/dev/null; then
         loge "Required command '$cmd' not found. Please install it."
         exit 1
@@ -70,8 +72,34 @@ save_checksum() {
 
 # ─── 1. Start Postgres ──────────────────────────────────────────────────────
 log "Starting PostgreSQL..."
-docker compose -f "$ROOT_DIR/docker-compose.dev.yml" up -d --wait
-log "PostgreSQL is ready."
+USE_LOCAL_PG=0
+if command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then
+    docker compose -f "$ROOT_DIR/docker-compose.dev.yml" up -d --wait
+    log "PostgreSQL is ready (Docker)."
+elif command -v pg_ctlcluster &>/dev/null; then
+    # Find the local PG version/cluster and start it
+    PG_VERSION=$(pg_lsclusters -h | awk 'NR==1{print $1}')
+    PG_CLUSTER=$(pg_lsclusters -h | awk 'NR==1{print $2}')
+    if [[ -n "$PG_VERSION" && -n "$PG_CLUSTER" ]]; then
+        pg_ctlcluster "$PG_VERSION" "$PG_CLUSTER" start 2>/dev/null || true
+        # Ensure the keystone role and database exist
+        sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='keystone'" \
+            | grep -q 1 || sudo -u postgres psql -c "CREATE USER keystone WITH PASSWORD 'keystone';" &>/dev/null
+        sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='keystone'" \
+            | grep -q 1 || sudo -u postgres psql -c "CREATE DATABASE keystone OWNER keystone;" &>/dev/null
+        USE_LOCAL_PG=1
+        log "PostgreSQL is ready (local pg_ctlcluster)."
+    else
+        loge "No local PostgreSQL cluster found and Docker is unavailable. Please install Docker or PostgreSQL."
+        exit 1
+    fi
+elif command -v pg_ctl &>/dev/null; then
+    loge "Docker is unavailable. Please start PostgreSQL manually or install Docker."
+    exit 1
+else
+    loge "Neither Docker nor a local PostgreSQL installation was found. Please install one."
+    exit 1
+fi
 
 # ─── 2. Python venv + deps ──────────────────────────────────────────────────
 if [[ ! -d "$VENV_DIR" ]]; then
