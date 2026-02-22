@@ -1,4 +1,4 @@
-import type { Message, Conversation } from "./chat";
+import type { GraphNode, Conversation } from "./chat";
 
 /**
  * Props passed to every module slot component.
@@ -14,7 +14,7 @@ export interface SlotProps {
 }
 
 export interface MessageSlotProps extends SlotProps {
-  message: Message;
+  message: GraphNode;
 }
 
 export type ModuleAction =

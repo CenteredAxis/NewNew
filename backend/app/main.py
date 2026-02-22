@@ -4,7 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .core.module_loader import ModuleLoader
-from .routers import chat, models
+from .core.database import Base, engine
+from .routers import chat, graph, models
 
 
 module_loader = ModuleLoader()
@@ -12,6 +13,9 @@ module_loader = ModuleLoader()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Ensure tables exist (dev convenience; production uses alembic)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     module_loader.discover_and_mount(app)
     yield
 
@@ -27,6 +31,7 @@ app.add_middleware(
 
 app.include_router(chat.router, prefix="/api")
 app.include_router(models.router, prefix="/api")
+app.include_router(graph.router, prefix="/api")
 
 
 @app.get("/api/health")

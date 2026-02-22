@@ -1,121 +1,64 @@
-import { useRef, useCallback, useState, useEffect } from "react";
-import type { Message } from "../types/chat";
-import { useCanvasPositions, type Position } from "../hooks/useCanvasPositions";
-import { CanvasCard } from "./CanvasCard";
+import { useMemo, useCallback } from "react";
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
+  BackgroundVariant,
+  type Node as RFNode,
+  type Edge as RFEdge,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+
+import type { GraphNode } from "../types/chat";
+import { graphToReactFlow } from "../lib/graphLayout";
+import { GraphNodeCard } from "./GraphNodeCard";
 
 interface CanvasViewProps {
-  messages: Message[];
+  nodes: GraphNode[];
+  activeNodeId: string | null;
   streaming: boolean;
-  conversationId: string | null;
+  onNodeSelect: (id: string) => void;
+  onFork: (nodeId: string) => void;
 }
 
-function clamp(val: number, min: number, max: number) {
-  return Math.min(Math.max(val, min), max);
-}
+const nodeTypes = { graphNode: GraphNodeCard };
 
-export function CanvasView({ messages, streaming, conversationId }: CanvasViewProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { positions, pan, zoom, setPosition, setPan, setZoom, resetView, resetLayout } =
-    useCanvasPositions(conversationId, messages);
+export function CanvasView({
+  nodes: graphNodes,
+  activeNodeId,
+  streaming,
+  onNodeSelect,
+  onFork,
+}: CanvasViewProps) {
+  // Convert DAG nodes to ReactFlow format with handlers injected
+  const { rfNodes, rfEdges } = useMemo(() => {
+    const { rfNodes: layoutNodes, rfEdges: layoutEdges } = graphToReactFlow(
+      graphNodes,
+      activeNodeId
+    );
 
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+    // Inject streaming + onFork into each node's data
+    const enrichedNodes: RFNode[] = layoutNodes.map((n) => ({
+      ...n,
+      data: {
+        ...n.data,
+        streaming,
+        onFork,
+      },
+    }));
 
-  // Clear expanded state when conversation changes
-  useEffect(() => {
-    setExpandedIds(new Set());
-  }, [conversationId]);
+    return { rfNodes: enrichedNodes, rfEdges: layoutEdges as RFEdge[] };
+  }, [graphNodes, activeNodeId, streaming, onFork]);
 
-  // Pan state
-  const panState = useRef<{
-    pointerId: number;
-    lastX: number;
-    lastY: number;
-  } | null>(null);
-
-  const onCanvasPointerDown = useCallback((e: React.PointerEvent) => {
-    // Only start pan if clicking directly on the canvas (not a card)
-    const target = e.target as HTMLElement;
-    if (target.closest("[data-canvas-card]")) return;
-    if (e.button !== 0 && e.pointerType === "mouse") return;
-
-    panState.current = {
-      pointerId: e.pointerId,
-      lastX: e.clientX,
-      lastY: e.clientY,
-    };
-    containerRef.current?.setPointerCapture(e.pointerId);
-    e.currentTarget.style.cursor = "grabbing";
-  }, []);
-
-  const onCanvasPointerMove = useCallback((e: React.PointerEvent) => {
-    const ps = panState.current;
-    if (!ps || ps.pointerId !== e.pointerId) return;
-
-    const dx = e.clientX - ps.lastX;
-    const dy = e.clientY - ps.lastY;
-    ps.lastX = e.clientX;
-    ps.lastY = e.clientY;
-
-    setPan((prev: Position) => ({ x: prev.x + dx, y: prev.y + dy }));
-  }, [setPan]);
-
-  const onCanvasPointerUp = useCallback((e: React.PointerEvent) => {
-    if (!panState.current || panState.current.pointerId !== e.pointerId) return;
-    panState.current = null;
-    e.currentTarget.style.cursor = "";
-  }, []);
-
-  const onWheel = useCallback(
-    (e: React.WheelEvent) => {
-      e.preventDefault();
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      const factor = Math.pow(0.999, e.deltaY);
-      const newZoom = clamp(zoom * factor, 0.2, 2.5);
-
-      setPan((prev: Position) => ({
-        x: mx - (mx - prev.x) * (newZoom / zoom),
-        y: my - (my - prev.y) * (newZoom / zoom),
-      }));
-      setZoom(newZoom);
+  const handleNodeClick = useCallback(
+    (_: React.MouseEvent, node: RFNode) => {
+      onNodeSelect(node.id);
     },
-    [zoom, setPan, setZoom]
+    [onNodeSelect]
   );
 
-  const handleDragEnd = useCallback(
-    (id: string, pos: Position) => {
-      setPosition(id, pos);
-    },
-    [setPosition]
-  );
-
-  const handleToggleExpand = useCallback((id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  // Grid background that tracks pan and zoom
-  const gridStyle: React.CSSProperties = {
-    backgroundImage: "radial-gradient(circle, #404040 1px, transparent 1px)",
-    backgroundSize: `${40 * zoom}px ${40 * zoom}px`,
-    backgroundPosition: `${pan.x}px ${pan.y}px`,
-  };
-
-  const transformStyle: React.CSSProperties = {
-    transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
-    transformOrigin: "0 0",
-    position: "absolute",
-    inset: 0,
-  };
-
-  if (messages.length === 0) {
+  if (graphNodes.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-neutral-500 select-none">
         Start a conversation
@@ -124,63 +67,43 @@ export function CanvasView({ messages, streaming, conversationId }: CanvasViewPr
   }
 
   return (
-    <div className="relative flex-1 overflow-hidden">
-      {/* Dot grid background */}
-      <div className="absolute inset-0 pointer-events-none" style={gridStyle} />
-
-      {/* Canvas surface */}
-      <div
-        ref={containerRef}
-        className="absolute inset-0 cursor-grab"
-        onPointerDown={onCanvasPointerDown}
-        onPointerMove={onCanvasPointerMove}
-        onPointerUp={onCanvasPointerUp}
-        onPointerCancel={onCanvasPointerUp}
-        onWheel={onWheel}
+    <div className="flex-1 h-full">
+      <ReactFlow
+        nodes={rfNodes}
+        edges={rfEdges}
+        nodeTypes={nodeTypes}
+        onNodeClick={handleNodeClick}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        edgesFocusable={false}
+        fitView
+        fitViewOptions={{ padding: 0.2 }}
+        minZoom={0.1}
+        maxZoom={2}
+        proOptions={{ hideAttribution: true }}
+        className="bg-neutral-950"
       >
-        {/* Transform container */}
-        <div style={transformStyle}>
-          {messages.map((msg, i) => {
-            const pos = positions[msg.id];
-            if (!pos) return null;
-            return (
-              <div key={msg.id} data-canvas-card>
-                <CanvasCard
-                  message={msg}
-                  position={pos}
-                  zoom={zoom}
-                  isLast={i === messages.length - 1}
-                  streaming={streaming}
-                  expanded={expandedIds.has(msg.id)}
-                  onDragEnd={handleDragEnd}
-                  onToggleExpand={handleToggleExpand}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* HUD controls — fixed over canvas */}
-      <div className="absolute bottom-3 right-3 flex items-center gap-2 z-10">
-        <button
-          onClick={() => resetLayout(messages)}
-          className="px-2.5 py-1 text-xs text-neutral-400 hover:text-neutral-100 bg-neutral-800/80 hover:bg-neutral-700 border border-neutral-700 rounded-lg backdrop-blur-sm transition-colors"
-          title="Reset card layout"
-        >
-          Reset layout
-        </button>
-        <button
-          onClick={resetView}
-          className="px-2.5 py-1 text-xs text-neutral-400 hover:text-neutral-100 bg-neutral-800/80 hover:bg-neutral-700 border border-neutral-700 rounded-lg backdrop-blur-sm transition-colors"
-          title="Reset pan and zoom"
-        >
-          Home
-        </button>
-        <span className="text-xs text-neutral-600 w-10 text-right tabular-nums">
-          {Math.round(zoom * 100)}%
-        </span>
-      </div>
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={40}
+          size={1}
+          color="#404040"
+        />
+        <Controls
+          className="!bg-neutral-800 !border-neutral-700 !shadow-lg [&>button]:!bg-neutral-800 [&>button]:!border-neutral-700 [&>button]:!text-neutral-400 [&>button:hover]:!bg-neutral-700"
+        />
+        <MiniMap
+          className="!bg-neutral-900 !border-neutral-700"
+          nodeColor={(node) => {
+            const data = node.data as Record<string, unknown>;
+            if (data?.isActive) return "#3b82f6";
+            const graphNode = data?.node as GraphNode | undefined;
+            if (graphNode?.role === "user") return "#60a5fa";
+            return "#525252";
+          }}
+          maskColor="rgba(0,0,0,0.6)"
+        />
+      </ReactFlow>
     </div>
   );
 }

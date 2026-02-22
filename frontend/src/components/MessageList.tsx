@@ -1,17 +1,17 @@
 import { useEffect, useRef } from "react";
-import type { Message } from "../types/chat";
+import type { GraphNode } from "../types/chat";
 import type { ModuleManifest, SlotProps } from "../types/module";
 import { SlotRenderer } from "./SlotRenderer";
 
 interface MessageListProps {
-  messages: Message[];
+  nodes: GraphNode[];
   streaming: boolean;
   modules: ModuleManifest[];
   slotProps: SlotProps;
 }
 
 export function MessageList({
-  messages,
+  nodes,
   streaming,
   modules,
   slotProps,
@@ -20,9 +20,9 @@ export function MessageList({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [nodes]);
 
-  if (messages.length === 0) {
+  if (nodes.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-neutral-500 select-none">
         Start a conversation
@@ -32,11 +32,11 @@ export function MessageList({
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
-      {messages.map((msg, i) => (
+      {nodes.map((node, i) => (
         <MessageBubble
-          key={msg.id}
-          message={msg}
-          isLast={i === messages.length - 1}
+          key={node.id}
+          node={node}
+          isLast={i === nodes.length - 1}
           streaming={streaming}
           modules={modules}
           slotProps={slotProps}
@@ -48,7 +48,7 @@ export function MessageList({
 }
 
 interface MessageBubbleProps {
-  message: Message;
+  node: GraphNode;
   isLast: boolean;
   streaming: boolean;
   modules: ModuleManifest[];
@@ -56,13 +56,13 @@ interface MessageBubbleProps {
 }
 
 function MessageBubble({
-  message,
+  node,
   isLast,
   streaming,
   modules,
   slotProps,
 }: MessageBubbleProps) {
-  const isUser = message.role === "user";
+  const isUser = node.role === "user";
   const showCursor = isLast && !isUser && streaming;
 
   return (
@@ -74,7 +74,7 @@ function MessageBubble({
             : "bg-neutral-800 text-neutral-100 rounded-bl-sm"
         }`}
       >
-        {message.content}
+        {node.content}
         {showCursor && (
           <span className="inline-block w-0.5 h-4 bg-neutral-400 ml-0.5 align-middle animate-pulse" />
         )}
@@ -84,7 +84,7 @@ function MessageBubble({
       <SlotRenderer
         modules={modules}
         slot="messageActions"
-        props={{ ...slotProps, message }}
+        props={{ ...slotProps, message: node }}
       />
     </div>
   );

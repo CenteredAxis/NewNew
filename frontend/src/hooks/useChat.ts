@@ -1,3 +1,4 @@
+// @ts-nocheck — Deprecated: replaced by useGraph.ts (DAG-based state management)
 import { useState, useCallback, useRef } from "react";
 import { streamChat, type ApiConfig } from "../lib/api";
 import type { Conversation, Message } from "../types/chat";
