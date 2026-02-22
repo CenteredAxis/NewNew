@@ -1,4 +1,4 @@
-# Local LLM Webapp
+# Keystone
 
 Minimal, modular web UI for any OpenAI-compatible local LLM endpoint (Ollama, LM Studio, llama.cpp, vLLM, etc.).
 

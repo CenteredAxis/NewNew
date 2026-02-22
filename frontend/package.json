@@ -1,5 +1,5 @@
 {
-  "name": "local-llm-webapp",
+  "name": "keystone",
   "version": "0.1.0",
   "private": true,
   "type": "module",
