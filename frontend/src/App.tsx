@@ -66,6 +66,8 @@ export default function App() {
     setActiveNodeId,
     executeNode,
     refreshNode,
+    moveNode,
+    createWorkspaceNode,
   } = useGraph(apiConfig);
 
   const effectiveModel = selectedModel || models[0] || "";
@@ -165,6 +167,10 @@ export default function App() {
         onFork={handleFork}
         onExecute={executeNode}
         onRefresh={refreshNode}
+        onNodeMove={moveNode}
+        onCreateWorkspaceNode={(nodeType, x, y) =>
+          createWorkspaceNode(nodeType, x, y, effectiveModel)
+        }
         modules={MODULES}
         slotProps={slotProps}
       />

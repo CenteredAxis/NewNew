@@ -1,4 +1,4 @@
-export type Role = "user" | "assistant" | "system";
+export type Role = "user" | "assistant" | "system" | "workspace";
 
 /**
  * DAG Node — replaces the old linear Message type.

@@ -44,12 +44,14 @@ function GraphNodeCardInner({ data }: NodeProps) {
   const isDynamic = nodeType !== "message";
   const status = node.metadata?.status;
 
+  const isWorkspace = node.role === "workspace";
+
   const roleColor =
     node.role === "user"
       ? "border-blue-500"
       : node.role === "system"
         ? "border-amber-500"
-        : isDynamic
+        : isDynamic || isWorkspace
           ? "border-purple-500"
           : "border-neutral-600";
 
@@ -62,11 +64,14 @@ function GraphNodeCardInner({ data }: NodeProps) {
   const maxH = expanded ? "max-h-[480px]" : "max-h-[120px]";
   const contentOverflow = !expanded && node.content.length > 200;
 
+  // Workspace nodes get a more prominent shadow to distinguish them as floating
+  const shadowStyle = isWorkspace ? "shadow-xl shadow-black/40" : "shadow-lg";
+
   return (
     <div
       className={`
         w-[280px] rounded-lg border-l-[3px] ${roleColor} ${activeBg}
-        border border-neutral-700/50 shadow-lg
+        border border-neutral-700/50 ${shadowStyle}
         transition-all duration-150
         hover:border-neutral-600
       `}
@@ -83,9 +88,26 @@ function GraphNodeCardInner({ data }: NodeProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-neutral-700/50">
         <div className="flex items-center gap-2">
+          {/* Drag handle — shown for workspace nodes to signal free positioning */}
+          {isWorkspace && (
+            <svg
+              width="8"
+              height="12"
+              viewBox="0 0 8 12"
+              fill="currentColor"
+              className="text-neutral-600 cursor-grab shrink-0"
+            >
+              <circle cx="2" cy="2" r="1.2" />
+              <circle cx="6" cy="2" r="1.2" />
+              <circle cx="2" cy="6" r="1.2" />
+              <circle cx="6" cy="6" r="1.2" />
+              <circle cx="2" cy="10" r="1.2" />
+              <circle cx="6" cy="10" r="1.2" />
+            </svg>
+          )}
           <span
             className={`w-2 h-2 rounded-full ${
-              isDynamic
+              isDynamic || isWorkspace
                 ? "bg-purple-400"
                 : node.role === "user"
                   ? "bg-blue-400"
@@ -95,10 +117,16 @@ function GraphNodeCardInner({ data }: NodeProps) {
             }`}
           />
           <span className="text-[10px] text-neutral-500 uppercase tracking-wider">
-            {isDynamic ? nodeType : node.role}
+            {isWorkspace
+              ? nodeType === "message"
+                ? "note"
+                : nodeType
+              : isDynamic
+                ? nodeType
+                : node.role}
           </span>
-          {/* Status badge for dynamic nodes */}
-          {isDynamic && status && (
+          {/* Status badge for dynamic/workspace nodes */}
+          {(isDynamic || isWorkspace) && status && (
             <span
               className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
                 status === "executing"
@@ -123,8 +151,8 @@ function GraphNodeCardInner({ data }: NodeProps) {
               {childCount} branches
             </span>
           )}
-          {/* Execute/Refresh buttons for dynamic nodes */}
-          {isDynamic && status !== "executing" && (
+          {/* Execute/Refresh buttons for dynamic/workspace (non-message) nodes */}
+          {(isDynamic || (isWorkspace && nodeType !== "message")) && status !== "executing" && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -151,7 +179,7 @@ function GraphNodeCardInner({ data }: NodeProps) {
               )}
             </button>
           )}
-          {isDynamic && status === "executing" && (
+          {(isDynamic || (isWorkspace && nodeType !== "message")) && status === "executing" && (
             <span className="w-3 h-3 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
           )}
           <button

@@ -7,6 +7,7 @@ import {
   apiCreateNode,
   apiExecuteNode,
   apiRefreshNode,
+  apiUpdateNode,
   streamComplete,
   type ApiConfig,
 } from "../lib/api";
@@ -240,6 +241,51 @@ export function useGraph(config: ApiConfig) {
     return updated;
   }, []);
 
+  // Move a node to a new position (persists x/y to backend via metadata)
+  const moveNode = useCallback(async (nodeId: string, x: number, y: number) => {
+    // Optimistic update so layout immediately treats it as a free node
+    setNodes((prev) =>
+      prev.map((n) =>
+        n.id === nodeId ? { ...n, metadata: { ...n.metadata, x, y } } : n
+      )
+    );
+    try {
+      await apiUpdateNode(nodeId, { metadata: { x, y } }, configRef.current);
+    } catch {
+      // Position update failure is non-critical; the optimistic state persists
+    }
+  }, []);
+
+  // Create a free-form workspace node at the given flow coordinates.
+  // Pass model so we can auto-create a conversation if none exists yet.
+  const createWorkspaceNode = useCallback(
+    async (nodeType: string, x: number, y: number, model?: string) => {
+      let convId = activeId;
+      if (!convId) {
+        if (!model) return; // Need a model to auto-create a conversation
+        const conv = await apiCreateConversation(model, configRef.current);
+        setConversations((prev) => [conv, ...prev]);
+        setActiveId(conv.id);
+        convId = conv.id;
+      }
+      const node = await apiCreateNode(
+        convId,
+        {
+          parentId: activeNodeId,
+          content: "",
+          role: "workspace",
+          nodeType,
+          metadata: { x, y, status: "idle", input: {}, output: {} },
+        },
+        configRef.current
+      );
+      setNodes((prev) => [...prev, node]);
+      setActiveNodeId(node.id);
+      return node;
+    },
+    [activeId, activeNodeId]
+  );
+
   return {
     conversations,
     activeConversation,
@@ -255,6 +301,8 @@ export function useGraph(config: ApiConfig) {
     setActiveNodeId,
     executeNode,
     refreshNode,
+    moveNode,
+    createWorkspaceNode,
   };
 }
 

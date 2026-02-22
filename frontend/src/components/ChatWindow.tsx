@@ -24,6 +24,8 @@ interface ChatWindowProps {
   onFork: (nodeId: string) => void;
   onExecute?: (nodeId: string) => void;
   onRefresh?: (nodeId: string) => void;
+  onNodeMove?: (nodeId: string, x: number, y: number) => void;
+  onCreateWorkspaceNode?: (nodeType: string, x: number, y: number) => void;
   modules: ModuleManifest[];
   slotProps: SlotProps;
 }
@@ -45,6 +47,8 @@ export function ChatWindow({
   onFork,
   onExecute,
   onRefresh,
+  onNodeMove,
+  onCreateWorkspaceNode,
   modules,
   slotProps,
 }: ChatWindowProps) {
@@ -107,6 +111,8 @@ export function ChatWindow({
             onFork={onFork}
             onExecute={onExecute}
             onRefresh={onRefresh}
+            onNodeMove={onNodeMove}
+            onCreateWorkspaceNode={onCreateWorkspaceNode}
           />
         )}
 

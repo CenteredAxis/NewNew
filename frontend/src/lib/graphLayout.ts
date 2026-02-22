@@ -16,7 +16,14 @@ interface TreeNode {
 
 /**
  * Convert a flat array of GraphNode[] into ReactFlow nodes + edges.
- * Computes a top-down tree layout with horizontal spreading for branches.
+ *
+ * Nodes are split into two categories:
+ *   - "free" nodes: have both metadata.x and metadata.y set (user-positioned)
+ *   - "tree" nodes: no metadata position — placed by the auto tree layout
+ *
+ * Free nodes are excluded from the tree algorithm so they don't affect
+ * sibling positions. They are added at their stored coordinates after the
+ * tree layout runs. All parent→child edges are rendered regardless.
  */
 export function graphToReactFlow(
   nodes: GraphNode[],
@@ -24,18 +31,27 @@ export function graphToReactFlow(
 ): { rfNodes: RFNode[]; rfEdges: RFEdge[] } {
   if (nodes.length === 0) return { rfNodes: [], rfEdges: [] };
 
-  // Build parent → children map
-  const childrenMap = new Map<string | null, GraphNode[]>();
-  const nodeMap = new Map<string, GraphNode>();
+  // Split into free-positioned and tree-layout nodes
+  const freeNodes = nodes.filter(
+    (n) => n.metadata?.x != null && n.metadata?.y != null
+  );
+  const freeNodeIds = new Set(freeNodes.map((n) => n.id));
 
+  // Build a full node map for lineage and child lookups
+  const nodeMap = new Map<string, GraphNode>();
+  for (const n of nodes) nodeMap.set(n.id, n);
+
+  // Build parent → children map (tree nodes only, so free nodes don't
+  // participate in width computation or positioning)
+  const childrenMap = new Map<string | null, GraphNode[]>();
   for (const n of nodes) {
-    nodeMap.set(n.id, n);
+    if (freeNodeIds.has(n.id)) continue;
     const parentKey = n.parentId;
     if (!childrenMap.has(parentKey)) childrenMap.set(parentKey, []);
     childrenMap.get(parentKey)!.push(n);
   }
 
-  // Find roots (nodes with null parentId)
+  // Find roots (tree nodes with null parentId)
   const roots = childrenMap.get(null) ?? [];
 
   // Build tree structure recursively
@@ -93,22 +109,36 @@ export function graphToReactFlow(
     }
   }
 
-  // Flatten tree into ReactFlow nodes + edges
   const rfNodes: RFNode[] = [];
   const rfEdges: RFEdge[] = [];
 
+  // Helper: emit an edge from parent → child
+  function addEdge(node: GraphNode): void {
+    if (!node.parentId) return;
+    const edgeActive =
+      activeLineage.has(node.id) && activeLineage.has(node.parentId);
+    rfEdges.push({
+      id: `${node.parentId}->${node.id}`,
+      source: node.parentId,
+      target: node.id,
+      type: "smoothstep",
+      animated: edgeActive,
+      style: {
+        stroke: edgeActive ? "#3b82f6" : "#525252",
+        strokeWidth: edgeActive ? 2 : 1,
+      },
+    });
+  }
+
+  // Flatten tree into ReactFlow nodes + edges
   function flatten(tree: TreeNode): void {
     const isActive = activeLineage.has(tree.node.id);
     const isActiveNode = tree.node.id === activeNodeId;
 
-    // Use metadata position if set, otherwise computed layout
-    const x = tree.node.metadata?.x != null ? (tree.node.metadata.x as number) : tree.x;
-    const y = tree.node.metadata?.y != null ? (tree.node.metadata.y as number) : tree.y;
-
     rfNodes.push({
       id: tree.node.id,
       type: "graphNode",
-      position: { x, y },
+      position: { x: tree.x, y: tree.y },
       data: {
         node: tree.node,
         isActive,
@@ -118,31 +148,14 @@ export function graphToReactFlow(
       },
     });
 
-    // Edge from parent → child
-    if (tree.node.parentId) {
-      const edgeActive =
-        activeLineage.has(tree.node.id) &&
-        activeLineage.has(tree.node.parentId);
-
-      rfEdges.push({
-        id: `${tree.node.parentId}->${tree.node.id}`,
-        source: tree.node.parentId,
-        target: tree.node.id,
-        type: "smoothstep",
-        animated: edgeActive,
-        style: {
-          stroke: edgeActive ? "#3b82f6" : "#525252",
-          strokeWidth: edgeActive ? 2 : 1,
-        },
-      });
-    }
+    addEdge(tree.node);
 
     for (const child of tree.children) {
       flatten(child);
     }
   }
 
-  // Process all roots
+  // Process all tree roots
   const trees = roots.map((r) => buildTree(r, 0));
   let offset = 0;
   for (const tree of trees) {
@@ -150,6 +163,31 @@ export function graphToReactFlow(
     positionX(tree, offset);
     flatten(tree);
     offset += tree.width + H_GAP * 2;
+  }
+
+  // Add free-positioned nodes at their stored coordinates
+  for (const n of freeNodes) {
+    const isActive = activeLineage.has(n.id);
+    const isActiveNode = n.id === activeNodeId;
+    const childCount = nodes.filter((node) => node.parentId === n.id).length;
+
+    rfNodes.push({
+      id: n.id,
+      type: "graphNode",
+      position: {
+        x: n.metadata!.x as number,
+        y: n.metadata!.y as number,
+      },
+      data: {
+        node: n,
+        isActive,
+        isActiveNode,
+        hasChildren: childCount > 0,
+        childCount,
+      },
+    });
+
+    addEdge(n);
   }
 
   return { rfNodes, rfEdges };
