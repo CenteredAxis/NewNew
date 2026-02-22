@@ -31,6 +31,14 @@ export function useChat(initialModel: string, config: ApiConfig) {
   const activeConversation =
     conversations.find((c) => c.id === activeId) ?? null;
 
+  // Keep refs so sendMessage always reads the latest state without needing
+  // activeConversation in its dependency array (which caused stale closures
+  // and duplicate tool_use IDs in long conversations).
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
+
   const updateConversation = useCallback(
     (id: string, updater: (c: Conversation) => Conversation) => {
       setConversations((prev) =>
@@ -73,11 +81,20 @@ export function useChat(initialModel: string, config: ApiConfig) {
 
   const sendMessage = useCallback(
     async (content: string, model: string) => {
-      let target = activeConversation;
+      // Always read from ref so we get the live state, not a stale closure
+      // snapshot. This is the same pattern used for configRef above and is
+      // the primary fix for the "tool_use ids must be unique" error that
+      // occurs in long conversations.
+      let target =
+        conversationsRef.current.find((c) => c.id === activeIdRef.current) ??
+        null;
       if (!target) {
         target = newConversation(model);
         setConversations((prev) => [target!, ...prev]);
         setActiveId(target.id);
+        // Update ref immediately so the history below sees the new conversation
+        conversationsRef.current = [target];
+        activeIdRef.current = target.id;
       }
 
       const convId = target.id;
@@ -110,8 +127,20 @@ export function useChat(initialModel: string, config: ApiConfig) {
       abortRef.current = new AbortController();
 
       try {
+        // Deduplicate by message id and strip internal fields (id, createdAt)
+        // before sending to the API. Keeping those fields out prevents any
+        // chance of the API misinterpreting them, and deduplication guards
+        // against tool_use id collisions if the same message somehow appears
+        // more than once in the stored history.
+        const seenIds = new Set<string>();
         const history = [
-          ...target.messages,
+          ...target.messages
+            .filter((m) => {
+              if (seenIds.has(m.id)) return false;
+              seenIds.add(m.id);
+              return true;
+            })
+            .map(({ role, content: c }) => ({ role, content: c })),
           { role: userMsg.role, content: userMsg.content },
         ];
 
@@ -145,7 +174,7 @@ export function useChat(initialModel: string, config: ApiConfig) {
         abortRef.current = null;
       }
     },
-    [activeConversation, updateConversation]
+    [updateConversation]
   );
 
   const stopStreaming = useCallback(() => {
