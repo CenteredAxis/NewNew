@@ -8,6 +8,7 @@ walking backward from the active node to the root.
 
 import json
 import uuid
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -17,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.dag import dag_walk, estimate_tokens
-from ..core.database import get_db
+from ..core.database import async_session, get_db
 from ..core.llm import stream_chat_completions
 from ..models import Conversation, Node
 
@@ -270,11 +271,6 @@ async def complete(
             "X-Accel-Buffering": "no",
         },
     )
-
-
-# Helper to get a fresh db session for persistence after streaming
-from contextlib import asynccontextmanager
-from ..core.database import async_session
 
 
 @asynccontextmanager
