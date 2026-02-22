@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
-import { useChat } from "./hooks/useChat";
+import { useGraph, getLineage } from "./hooks/useGraph";
 import { useModels } from "./hooks/useModels";
 import { loadModules } from "./lib/moduleLoader";
 import { Sidebar } from "./components/Sidebar";
@@ -55,16 +55,28 @@ export default function App() {
   const {
     conversations,
     activeConversation,
+    nodes,
+    activeNodeId,
     streaming,
     sendMessage,
     stopStreaming,
     createConversation,
     selectConversation,
     deleteConversation,
-  } = useChat(selectedModel || models[0] || "", apiConfig);
+    setActiveNodeId,
+    executeNode,
+    refreshNode,
+    moveNode,
+    createWorkspaceNode,
+  } = useGraph(apiConfig);
 
-  // Keep selectedModel in sync when models load for the first time
   const effectiveModel = selectedModel || models[0] || "";
+
+  // Active branch lineage for list view
+  const activeBranch = useMemo(
+    () => getLineage(nodes, activeNodeId),
+    [nodes, activeNodeId]
+  );
 
   const handleModelChange = useCallback(
     (m: string) => {
@@ -78,6 +90,14 @@ export default function App() {
       sendMessage(content, effectiveModel);
     },
     [sendMessage, effectiveModel]
+  );
+
+  const handleFork = useCallback(
+    (nodeId: string) => {
+      // Set the fork point as active node — next send will branch from here
+      setActiveNodeId(nodeId);
+    },
+    [setActiveNodeId]
   );
 
   const dispatch: ModuleDispatch = useCallback(
@@ -132,6 +152,9 @@ export default function App() {
 
       <ChatWindow
         conversation={activeConversation}
+        nodes={nodes}
+        activeNodeId={activeNodeId}
+        activeBranch={activeBranch}
         streaming={streaming}
         models={models}
         modelsLoading={modelsLoading}
@@ -140,6 +163,14 @@ export default function App() {
         onModelsRefresh={refreshModels}
         onSend={handleSend}
         onStop={stopStreaming}
+        onNodeSelect={setActiveNodeId}
+        onFork={handleFork}
+        onExecute={executeNode}
+        onRefresh={refreshNode}
+        onNodeMove={moveNode}
+        onCreateWorkspaceNode={(nodeType, x, y) =>
+          createWorkspaceNode(nodeType, x, y, effectiveModel)
+        }
         modules={MODULES}
         slotProps={slotProps}
       />

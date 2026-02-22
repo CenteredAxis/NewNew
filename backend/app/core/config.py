@@ -19,5 +19,8 @@ class Settings(BaseSettings):
     # Directory (relative to repo root) where backend modules live.
     modules_dir: str = "backend/modules"
 
+    # PostgreSQL connection URL for async (asyncpg driver).
+    database_url: str = "postgresql+asyncpg://keystone:keystone@localhost:5432/keystone"
+
 
 settings = Settings()

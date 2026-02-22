@@ -1,4 +1,5 @@
 import type { ModuleManifest } from "../types/module";
+import { registerNodeRenderer } from "./nodeRenderers";
 
 /**
  * Vite glob-imports every file from src/modules/.
@@ -21,6 +22,15 @@ export function loadModules(): ModuleManifest[] {
       console.warn(`[modules] ${path} did not export a valid ModuleManifest`);
       continue;
     }
+    // Register any custom node type renderers from this module
+    if (manifest.nodeRenderers) {
+      for (const [nodeType, component] of Object.entries(
+        manifest.nodeRenderers
+      )) {
+        registerNodeRenderer(nodeType, component);
+      }
+    }
+
     manifests.push(manifest);
   }
 

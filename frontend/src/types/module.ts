@@ -1,4 +1,5 @@
-import type { Message, Conversation } from "./chat";
+import type { GraphNode, Conversation } from "./chat";
+import type { NodeRendererProps } from "../lib/nodeRenderers";
 
 /**
  * Props passed to every module slot component.
@@ -14,7 +15,7 @@ export interface SlotProps {
 }
 
 export interface MessageSlotProps extends SlotProps {
-  message: Message;
+  message: GraphNode;
 }
 
 export type ModuleAction =
@@ -50,4 +51,6 @@ export interface ModuleManifest {
     /** Rendered as an overlay on top of the chat area */
     chatOverlay: React.FC<SlotProps>;
   }>;
+  /** Custom renderers for dynamic node types (key = node type string) */
+  nodeRenderers?: Record<string, React.FC<NodeRendererProps>>;
 }

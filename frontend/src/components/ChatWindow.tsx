@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Conversation } from "../types/chat";
+import type { Conversation, GraphNode } from "../types/chat";
 import type { ModuleManifest, SlotProps } from "../types/module";
 import { MessageList } from "./MessageList";
 import { CanvasView } from "./CanvasView";
@@ -9,6 +9,9 @@ import { SlotRenderer } from "./SlotRenderer";
 
 interface ChatWindowProps {
   conversation: Conversation | null;
+  nodes: GraphNode[];
+  activeNodeId: string | null;
+  activeBranch: GraphNode[];
   streaming: boolean;
   models: string[];
   modelsLoading: boolean;
@@ -17,12 +20,21 @@ interface ChatWindowProps {
   onModelsRefresh: () => void;
   onSend: (content: string) => void;
   onStop: () => void;
+  onNodeSelect: (id: string) => void;
+  onFork: (nodeId: string) => void;
+  onExecute?: (nodeId: string) => void;
+  onRefresh?: (nodeId: string) => void;
+  onNodeMove?: (nodeId: string, x: number, y: number) => void;
+  onCreateWorkspaceNode?: (nodeType: string, x: number, y: number) => void;
   modules: ModuleManifest[];
   slotProps: SlotProps;
 }
 
 export function ChatWindow({
-  conversation,
+  conversation: _conversation,
+  nodes,
+  activeNodeId,
+  activeBranch,
   streaming,
   models,
   modelsLoading,
@@ -31,10 +43,16 @@ export function ChatWindow({
   onModelsRefresh,
   onSend,
   onStop,
+  onNodeSelect,
+  onFork,
+  onExecute,
+  onRefresh,
+  onNodeMove,
+  onCreateWorkspaceNode,
   modules,
   slotProps,
 }: ChatWindowProps) {
-  const [viewMode, setViewMode] = useState<"list" | "canvas">("list");
+  const [viewMode, setViewMode] = useState<"list" | "canvas">("canvas");
 
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full">
@@ -79,16 +97,22 @@ export function ChatWindow({
       <div className="flex-1 relative overflow-hidden flex flex-col">
         {viewMode === "list" ? (
           <MessageList
-            messages={conversation?.messages ?? []}
+            nodes={activeBranch}
             streaming={streaming}
             modules={modules}
             slotProps={slotProps}
           />
         ) : (
           <CanvasView
-            messages={conversation?.messages ?? []}
+            nodes={nodes}
+            activeNodeId={activeNodeId}
             streaming={streaming}
-            conversationId={conversation?.id ?? null}
+            onNodeSelect={onNodeSelect}
+            onFork={onFork}
+            onExecute={onExecute}
+            onRefresh={onRefresh}
+            onNodeMove={onNodeMove}
+            onCreateWorkspaceNode={onCreateWorkspaceNode}
           />
         )}
 
