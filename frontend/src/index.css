@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Smooth scrollbar in dark theme */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: theme('colors.neutral.600') transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: theme('colors.neutral.600');
+  border-radius: 3px;
+}
